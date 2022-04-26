@@ -96,7 +96,8 @@ code = %@
     return compile.CompiledAssembly
 end
 
-targetProcess = System::Diagnostics::Process.GetProcessesByName("notepad")[0]
+#targetProcess = System::Diagnostics::Process.GetProcessesByName("notepad")[0]
+targetProcess = System::Diagnostics::Process.GetCurrentProcess()
 assembly = generate(code)
 injection = assembly.get_types()[0]
 
